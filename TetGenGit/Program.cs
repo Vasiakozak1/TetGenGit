@@ -19,117 +19,39 @@ namespace TetGen
             this.Z = Z;
         }
     }
-    struct Triangle
+
+
+    struct Ray
     {
-        private Vertex[] Vertexes;
-        public Vertex Normal { get; private set; }
-        public Vertex this[int index]
+        public Vertex Start { get; private set; }
+        public Vertex End { get; private set; }
+
+        public ParallelTo RayParallel { get; private set; }
+
+        public List<Vertex> VertexesOfEntry { get; private set; }
+
+        public static Ray GetRay(Vertex start, Vertex end, ParallelTo rayParallel, params Vertex[] vertexesOfEntry)
         {
-            get { return this.Vertexes[index]; }
-        }
-        public Triangle(IEnumerable<Vertex> Vertexes, Vertex Normal)
-        {
-            int count = 0;
-            this.Vertexes = new Vertex[3];
-            foreach (Vertex vertx in Vertexes)
-            {
-                this.Vertexes[count] = vertx;
-                count++;
-            }
-            this.Normal = Normal;
-        }
-        /// <summary>
-        /// Розділяє трикутник теперішнього екземпляру на декілька
-        /// При cooficient = 2 розділяє 1 раз при 3 - 2 рази і так далі
-        /// </summary>
-        /// <param name="cooficient"></param>
-        /// <returns></returns>
-        public Triangle[] DivideTriangle(int cooficient)
-        {
-            Vertex firstSharedSide = new Vertex();
-            Vertex secondSharedSize = new Vertex();
-            Vertex another1 = new Vertex();
-            Vertex another2 = new Vertex();
-            List<Triangle> resultTriangles = new List<Triangle>();
-            for (int i = 1; i < cooficient; i++)
-            {
-                for (int j = 0; j < 3; j++)
-                {
-                    another1 = new Vertex();
-                    another2 = new Vertex();
-                    switch (j)
-                    {
-                        case 0:
-                            another1 = this.Vertexes[1]; another2 = this.Vertexes[2];
-                            break;
-                        case 1:
-                            another1 = this.Vertexes[0]; another2 = this.Vertexes[2];
-                            break;
-                        case 2:
-                            another1 = this.Vertexes[1]; another2 = this.Vertexes[0];
-                            break;
-                    }
-                    if (this.Vertexes[j].X < another1.X && this.Vertexes[j].X > another2.X || this.Vertexes[j].X > another1.X && this.Vertexes[j].X < another2.X)
-                    {
-                        firstSharedSide = this.Vertexes[j];
-                        break;
-                    }
-                    else if (this.Vertexes[j].Y < another1.Y && this.Vertexes[j].Y > another2.Y || this.Vertexes[j].Y > another1.Y && this.Vertexes[j].Y < another2.Y)
-                    {
-                        firstSharedSide = this.Vertexes[j];
-                        break;
-                    }
-                    else if (j == 2)
-                    {
-                        int randVertex = new Random().Next(0, 3);
-                        switch (randVertex)
-                        {
-                            case 0:
-                                another1 = this.Vertexes[1]; another2 = this.Vertexes[2]; firstSharedSide = this.Vertexes[0];
-                                break;
-                            case 1:
-                                another1 = this.Vertexes[0]; another2 = this.Vertexes[2]; firstSharedSide = this.Vertexes[1];
-                                break;
-                            case 2:
-                                another1 = this.Vertexes[1]; another2 = this.Vertexes[0]; firstSharedSide = this.Vertexes[2];
-                                break;
-                        }
-                    }
-                }
-                double coordX = (another1.X + another2.X) / 2;
-                double coordY = (another1.Y + another2.Y) / 2;
-                double coordZ = (another1.Z + another2.Z) / 2;
-                secondSharedSize = new Vertex(coordX, coordY, coordZ);
-                resultTriangles.AddRange(GetTriangles(new Vertex[] { firstSharedSide, secondSharedSize }, another1, another2));
-            }
-            return resultTriangles.ToArray();
-        }/// <summary>
-         /// Формуж нові екземплряри трикутників із вказаних вершин
-         /// </summary>
-         /// <param name="sharedSide"></param>
-         /// <param name="another1"></param>
-         /// <param name="another2"></param>
-         /// <returns></returns>
-        private Triangle[] GetTriangles(Vertex[] sharedSide, Vertex another1, Vertex another2)
-        {
-            try
-            {
-                Vertex[] vertexesForFirst = new Vertex[] { sharedSide[0], sharedSide[1], another1 };
-                Vertex[] vertexesForSecond = new Vertex[] { sharedSide[0], sharedSide[1], another2 };
-                Triangle first = new Triangle(vertexesForFirst, new Vertex());//Треба враховувати вертекс нормалі
-                Triangle second = new Triangle(vertexesForSecond, new Vertex());//Треба враховувати вертекс нормалі
-                return new Triangle[] { first, second };
-            }
-            catch (IndexOutOfRangeException e)
-            {
-                Console.WriteLine("Occured error when divided triangle " + e.Message);
-                return null;
-            }
+            Ray result = new Ray();
+            result.Start = start;
+            result.End = end;
+            result.RayParallel = rayParallel;
+            result.VertexesOfEntry = new List<Vertex>();
+            if (vertexesOfEntry.Length != 0)
+                result.VertexesOfEntry.AddRange(vertexesOfEntry);
+            return result;
         }
     }
+    enum ParallelTo
+    {
+        X,
+        Y,
+        Z
+    }
+
     class Program
     {
-
+        #region Зчитування - запис  
         private static Triangle[] ReadASCIIFile(string fileName)
         {
             ReplaceCharInStr ReplaceDotToComma = (string line) =>
@@ -284,6 +206,68 @@ namespace TetGen
             }
         }
 
+        #endregion
+
+        private static Vertex[] ScanFigure(Triangle[] FigureTriangles, double SizeOfCubes)
+        {
+            //Крайні координати фігури
+            double minX = FigureTriangles[0][0].X;
+            double maxX = FigureTriangles[0][0].X;
+            double minY = FigureTriangles[0][0].Y;
+            double maxY = FigureTriangles[0][0].Y;
+            double minZ = FigureTriangles[0][0].Z;
+            double maxZ = FigureTriangles[0][0].Z;
+            foreach (Triangle triang in FigureTriangles)
+            {
+                double minXOfTriangle = new double[] { triang[0].X, triang[1].X, triang[2].X }.Min();
+                double maxXOfTriangle = new double[] { triang[0].X, triang[1].X, triang[2].X }.Max();
+
+                double minYOfTriangle = new double[] { triang[0].Y, triang[1].Y, triang[2].Y }.Min();
+                double maxYOfTriangle = new double[] { triang[0].Y, triang[1].Y, triang[2].Y }.Max();
+
+                double minZOfTriangle = new double[] { triang[0].Z, triang[1].Z, triang[2].Z }.Min();
+                double maxZOfTriangle = new double[] { triang[0].Z, triang[1].Z, triang[2].Z }.Max();
+
+                minX = minXOfTriangle < minX ? minXOfTriangle : minX;
+                maxX = maxXOfTriangle > maxX ? maxXOfTriangle : maxX;
+
+                minY = minYOfTriangle < minY ? minXOfTriangle : minY;
+                maxY = maxYOfTriangle > maxY ? maxYOfTriangle : maxY;
+
+                minZ = minZOfTriangle < minZ ? minZOfTriangle : minZ;
+                maxZ = maxZOfTriangle > maxZ ? maxZOfTriangle : maxZ;
+            }
+            // Знайшли крайні координати
+
+            ParallelTo RayParallelism = ParallelTo.X; // Робимо промені паралельні x
+
+            m1: int sizeOfFirstDimention = (int)((maxX - minX) / SizeOfCubes);
+            int sizeOfSecondDimention = (int)((maxY - minY) / SizeOfCubes);
+            int sizeOfThirdDimention = (int)((maxZ - minZ) / SizeOfCubes);
+            if (sizeOfFirstDimention == 0 || sizeOfSecondDimention == 0 || sizeOfThirdDimention == 0)
+            {
+                SizeOfCubes = SizeOfCubes / 2;
+                goto m1;
+            }
+            Ray[,,] arrayOfRaysX = new Ray[sizeOfThirdDimention, sizeOfSecondDimention, sizeOfFirstDimention];
+
+            // Проводимо промені паралельні x
+
+            for (double y = minY; y <= maxY; y += SizeOfCubes)
+            {
+                for (double z = minZ; z <= maxZ; z += SizeOfCubes)
+                {
+                    Vertex start = new Vertex(minX, y, z);
+                    Vertex end = new Vertex(minX + maxX, y, z);
+                    Ray tempRay = Ray.GetRay(start, end, RayParallelism);
+                }
+            }
+
+            return null;
+        }
+
+
+
         static void Main(string[] args)
         {
             List<Triangle> resultTriangles = new List<Triangle>();
@@ -297,13 +281,11 @@ namespace TetGen
             Triangle[] triangles = ReadASCIIFile(args[0]);
             foreach (Triangle triang in triangles)
             {
-                resultTriangles.AddRange(triang.DivideTriangle(2));
+                resultTriangles.AddRange(triang.DivideTriangle(6));
             }
             WriteASCIIFile(resultTriangles.ToArray(), args[1]);
-            // foreach (Triangle tr in triangles)
-            //  {
-            //       Console.WriteLine(tr[0].X+" "+tr[0].Y+" "+tr[0].Z+"\t\t"+tr[1].X+" "+tr[1].Y+" "+tr[1].Z+"\t\t"+tr[2].X+" "+tr[2].Y+" "+tr[2].Z);
-            //  }
+
+
             Console.ReadLine();
         }
     }
