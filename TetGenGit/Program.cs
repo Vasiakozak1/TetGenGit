@@ -6,7 +6,8 @@ using System.Threading.Tasks;
 using System.IO;
 namespace TetGen
 {
-    delegate string ReplaceCharInStr(string line);
+
+    delegate string ReplaceCharInStr(string str);
     struct Vertex
     {
         public double X { get; private set; }
@@ -17,6 +18,22 @@ namespace TetGen
             this.X = X;
             this.Y = Y;
             this.Z = Z;
+        }
+        public static bool operator ==(Vertex oper1, Vertex oper2)
+        {
+            if (oper1.X == oper2.X && oper1.Y == oper2.Y && oper1.Z == oper2.Z)
+                return true;
+            return false;
+        }
+        public static bool operator !=(Vertex oper1, Vertex oper2)
+        {
+            if (oper1.X == oper2.X && oper1.Y == oper2.Y && oper1.Z == oper2.Z)
+                return false;
+            return true;
+        }
+        public override bool Equals(object obj)
+        {
+            return base.Equals(obj);
         }
     }
 
@@ -41,15 +58,35 @@ namespace TetGen
                 result.VertexesOfEntry.AddRange(vertexesOfEntry);
             return result;
         }
+        // Перегружаємо оператори == !=
+        public static bool operator ==(Ray r1, Ray r2)
+        {
+            if (r1.Start.X != r2.Start.X || r1.Start.Y != r2.Start.Y || r1.Start.Z != r2.Start.Z)
+                return false;
+            if (r1.End.X != r2.End.X || r1.End.Y != r2.End.Y || r1.End.Z != r2.End.Z)
+                return false;
+
+            return true;
+        }
+        public static bool operator !=(Ray r1, Ray r2)
+        {
+            if (r1.Start.X != r2.Start.X || r1.Start.Y != r2.Start.Y || r1.Start.Z != r2.Start.Z)
+                return true;
+            if (r1.End.X != r2.End.X || r1.End.Y != r2.End.Y || r1.End.Z != r2.End.Z)
+                return true;
+
+            return false;
+        }
     }
     enum ParallelTo
     {
         X,
         Y,
-        Z
+        Z,
+        None
     }
 
-    class Program
+    partial class Program
     {
         #region Зчитування - запис  
         private static Triangle[] ReadASCIIFile(string fileName)
@@ -164,7 +201,7 @@ namespace TetGen
             return triangles.ToArray();
         }
 
-        private static void WriteASCIIFile(Triangle[] triangles, string fileName)
+        public static void WriteASCIIFile(Triangle[] triangles, string fileName)
         {
             ReplaceCharInStr ReplaceCommaToDot = (string line) =>
             {
@@ -208,65 +245,18 @@ namespace TetGen
 
         #endregion
 
-        private static Vertex[] ScanFigure(Triangle[] FigureTriangles, double SizeOfCubes)
+        private static List<Triangle> GetAbsoluteTriangles(List<Triangle> Triangles)
         {
-            //Крайні координати фігури
-            double minX = FigureTriangles[0][0].X;
-            double maxX = FigureTriangles[0][0].X;
-            double minY = FigureTriangles[0][0].Y;
-            double maxY = FigureTriangles[0][0].Y;
-            double minZ = FigureTriangles[0][0].Z;
-            double maxZ = FigureTriangles[0][0].Z;
-            foreach (Triangle triang in FigureTriangles)
-            {
-                double minXOfTriangle = new double[] { triang[0].X, triang[1].X, triang[2].X }.Min();
-                double maxXOfTriangle = new double[] { triang[0].X, triang[1].X, triang[2].X }.Max();
+            var result = from tempTriang in Triangles
+                         where tempTriang[0].X != 0 && tempTriang[0].Y != 0 && tempTriang[0].Z != 0
+                         where tempTriang[1].X != 0 && tempTriang[1].Y != 0 && tempTriang[1].Z != 0
+                         where tempTriang[2].X != 0 && tempTriang[2].Y != 0 && tempTriang[2].Z != 0
+                         select tempTriang;
 
-                double minYOfTriangle = new double[] { triang[0].Y, triang[1].Y, triang[2].Y }.Min();
-                double maxYOfTriangle = new double[] { triang[0].Y, triang[1].Y, triang[2].Y }.Max();
-
-                double minZOfTriangle = new double[] { triang[0].Z, triang[1].Z, triang[2].Z }.Min();
-                double maxZOfTriangle = new double[] { triang[0].Z, triang[1].Z, triang[2].Z }.Max();
-
-                minX = minXOfTriangle < minX ? minXOfTriangle : minX;
-                maxX = maxXOfTriangle > maxX ? maxXOfTriangle : maxX;
-
-                minY = minYOfTriangle < minY ? minXOfTriangle : minY;
-                maxY = maxYOfTriangle > maxY ? maxYOfTriangle : maxY;
-
-                minZ = minZOfTriangle < minZ ? minZOfTriangle : minZ;
-                maxZ = maxZOfTriangle > maxZ ? maxZOfTriangle : maxZ;
-            }
-            // Знайшли крайні координати
-
-            ParallelTo RayParallelism = ParallelTo.X; // Робимо промені паралельні x
-
-            m1: int sizeOfFirstDimention = (int)((maxX - minX) / SizeOfCubes);
-            int sizeOfSecondDimention = (int)((maxY - minY) / SizeOfCubes);
-            int sizeOfThirdDimention = (int)((maxZ - minZ) / SizeOfCubes);
-            if (sizeOfFirstDimention == 0 || sizeOfSecondDimention == 0 || sizeOfThirdDimention == 0)
-            {
-                SizeOfCubes = SizeOfCubes / 2;
-                goto m1;
-            }
-            Ray[,,] arrayOfRaysX = new Ray[sizeOfThirdDimention, sizeOfSecondDimention, sizeOfFirstDimention];
-
-            // Проводимо промені паралельні x
-
-            for (double y = minY; y <= maxY; y += SizeOfCubes)
-            {
-                for (double z = minZ; z <= maxZ; z += SizeOfCubes)
-                {
-                    Vertex start = new Vertex(minX, y, z);
-                    Vertex end = new Vertex(minX + maxX, y, z);
-                    Ray tempRay = Ray.GetRay(start, end, RayParallelism);
-                }
-            }
-
-            return null;
+            return result.ToList();
         }
 
-
+        public static Triangle[] Figure;
 
         static void Main(string[] args)
         {
@@ -278,15 +268,21 @@ namespace TetGen
                 Console.ReadLine();
                 return;
             }
-            Triangle[] triangles = ReadASCIIFile(args[0]);
-            foreach (Triangle triang in triangles)
+
+            Figure = ReadASCIIFile(args[0]);
+            foreach (Triangle triang in Figure)
             {
                 resultTriangles.AddRange(triang.DivideTriangle(6));
             }
             WriteASCIIFile(resultTriangles.ToArray(), args[1]);
 
+            List<Triangle> partitioning = ScanFigure(Figure, 0.200).ToList();
+            partitioning = new List<Triangle>(GetAbsoluteTriangles(partitioning));
+            partitioning.AddRange(Figure);
 
+            WriteASCIIFile(partitioning.ToArray(), "Test 09.05.17.stl");
             Console.ReadLine();
         }
+
     }
 }

@@ -11,6 +11,7 @@ namespace TetGen
         {
             get { return this.Vertexes[index]; }
         }
+
         public Triangle(IEnumerable<Vertex> Vertexes, Vertex Normal)
         {
             int count = 0;
@@ -22,6 +23,16 @@ namespace TetGen
             }
             this.Normal = Normal;
         }
+        public Triangle(params Vertex[] triangleVertexes)
+        {
+            if (triangleVertexes.Length != 3)
+                throw new Exception("Count of parametrs isn't 3");
+            this.Vertexes = new Vertex[3];
+            this.Normal = new Vertex();
+            for (int i = 0; i < 3; i++)
+                this.Vertexes[i] = triangleVertexes[i];
+        }
+        #region Застарілі методи
         /// <summary>
         /// Розділяє трикутник теперішнього екземпляру на декілька
         /// При cooficient = 2 розділяє 1 раз при 3 - 2 рази і так далі
@@ -110,8 +121,10 @@ namespace TetGen
                 return null;
             }
         }
+        #endregion
+
         /// <summary>
-        /// Повертаю false якщо пряма не перетинає трикутник 
+        /// Повертає false якщо пряма не перетинає трикутник, у противному випадку в структуру записується точка входу
         /// </summary>
         /// <param name="rayForCrossing">промінь для перевірки чи він перетианає трикутник, у властивість
         /// запипується точка перетину</param>
@@ -124,22 +137,23 @@ namespace TetGen
             switch (rayForCrossing.RayParallel)
             {
                 case ParallelTo.X:
-                    xCoords[0] = -rayForCrossing.Start.Z;
+                    xCoords[0] = rayForCrossing.Start.Z;
                     yCoords[0] = rayForCrossing.Start.Y;
-                    xCoords[1] = -this[0].Z; xCoords[2] = -this[1].Z; xCoords[3] = -this[2].Z;
+                    xCoords[1] = this[0].Z; xCoords[2] = this[1].Z; xCoords[3] = this[2].Z;
                     yCoords[1] = this[0].Y; yCoords[2] = this[1].Y; yCoords[3] = this[2].Y;
                     break;
                 case ParallelTo.Y:
                     xCoords[0] = rayForCrossing.Start.X;
-                    yCoords[0] = -rayForCrossing.Start.Z;
+                    yCoords[0] = rayForCrossing.Start.Z;
                     xCoords[1] = this[0].X; xCoords[2] = this[1].X; xCoords[3] = this[2].X;
-                    yCoords[1] = -this[0].Z; yCoords[2] = -this[1].Z; yCoords[3] = -this[2].Z;
+                    yCoords[1] = this[0].Z; yCoords[2] = this[1].Z; yCoords[3] = this[2].Z;
                     break;
                 case ParallelTo.Z:
+
                     xCoords[0] = rayForCrossing.Start.X;
                     yCoords[0] = rayForCrossing.Start.Y;
                     xCoords[1] = this[0].X; xCoords[2] = this[1].X; xCoords[3] = this[2].X;
-                    yCoords[1] = this[0].Y; yCoords[2] = this[2].Y; yCoords[3] = this[2].X;
+                    yCoords[1] = this[0].Y; yCoords[2] = this[1].Y; yCoords[3] = this[2].Y;
                     break;
             }
             double a = (xCoords[1] - xCoords[0]) * (yCoords[2] - yCoords[1]) - (xCoords[2] - xCoords[1]) * (yCoords[1] - yCoords[0]);
@@ -154,6 +168,7 @@ namespace TetGen
                 return false;
             }
             #endregion
+
             #region Визначаєм точку входження променя в трикутник
             // Робимо щось тіп того: http://www.reshebnik.ru/solutions/9/13/ 
             double m = rayForCrossing.End.X - rayForCrossing.Start.X;
@@ -163,41 +178,61 @@ namespace TetGen
             double variableX = (this[1].Y - this[0].Y) * (this[2].Z - this[0].Z) - (this[2].Y - this[0].Y) * (this[1].Z - this[0].Z);
             double variableY = -((this[1].X - this[0].X) * (this[2].Z - this[0].Z) - (this[2].X - this[0].X) * (this[1].Z - this[0].Z));
             double variableZ = (this[1].X - this[0].X) * (this[2].Y - this[0].Y) - (this[2].X - this[0].X) * (this[1].Y - this[0].Y);
-            double d = variableX * (-this[0].X) - variableY * (-this[0].Y) + variableZ * (-this[0].Z);
+            double d = variableX * (-this[0].X) + variableY * (-this[0].Y) + variableZ * (-this[0].Z);
+
+            double numberOfT = variableX * m;
+            numberOfT += variableY * n;
+            numberOfT += variableZ * p;
+            double numberOfFreeVar = variableX * (rayForCrossing.Start.X);
+            numberOfFreeVar += variableY * (rayForCrossing.Start.Y);
+            numberOfFreeVar += variableZ * (rayForCrossing.Start.Z) + d;
+
+            double t = (-numberOfFreeVar) / numberOfT;
+
+            double resX = rayForCrossing.Start.X + m * t;
+            double resY = rayForCrossing.Start.Y + n * t;
+            double resZ = rayForCrossing.Start.Z + p * t;
+
+            rayForCrossing.VertexesOfEntry.Add(new Vertex(resX, resY, resZ));
+            return true;
             #endregion
         }
-
-        private static Triangle[] DivideCube(Vertex[] vertexesOfCube)
+        /// <summary>
+        /// Метод тільки перевіряє чи перетинає промінь трикутник екземпляру
+        /// </summary>
+        /// <param name="RayForCheck"></param>
+        /// <returns></returns>
+        public bool IsCrossTheTriangle(Ray RayForCheck)
         {
-            // отримуємо точку в центрі куба
-            Vertex centerVertex;
+            double variableX = (this[1].Y - this[0].Y) * (this[2].Z - this[0].Z) - (this[2].Y - this[0].Y) * (this[1].Z - this[0].Z);
+            double variableY = -((this[1].X - this[0].X) * (this[2].Z - this[0].Z) - (this[2].X - this[0].X) * (this[1].Z - this[0].Z));
+            double variableZ = (this[1].X - this[0].X) * (this[2].Y - this[0].Y) - (this[2].X - this[0].X) * (this[1].Y - this[0].Y);
 
-            double maxLength = 0;
-            // Вершини які при з`єднанні утворюють найбільшу діагональ
-            Vertex verDiagonal1 = new Vertex();
-            Vertex verDiagonal2 = new Vertex();
-            for (int i = 0; i < vertexesOfCube.Length; i++)
+            int numOfCoord = 0;
+            if (variableX == 0 && variableY == 0)
+                numOfCoord = 3;
+            else if (variableX == 0 && variableZ == 0)
+                numOfCoord = 2;
+            else if (variableY == 0 && variableZ == 0)
+                numOfCoord = 1;
+            switch (numOfCoord)
             {
-                for (int j = 0; j < vertexesOfCube.Length; j++)
-                {
-                    if (i == j)
-                        continue;
-                    double lengthOfLine = Math.Sqrt((vertexesOfCube[i].X - vertexesOfCube[j].X) * (vertexesOfCube[i].X - vertexesOfCube[j].X)
-                        + (vertexesOfCube[i].Y - vertexesOfCube[j].Y) * (vertexesOfCube[i].Y - vertexesOfCube[j].Y)
-                        + (vertexesOfCube[i].Z - vertexesOfCube[j].Z) * (vertexesOfCube[i].Z - vertexesOfCube[j].Z));
-                    if (lengthOfLine > maxLength)
-                    {
-                        maxLength = lengthOfLine;
-                        verDiagonal1 = vertexesOfCube[i];
-                        verDiagonal2 = vertexesOfCube[j];
-                    }
-
-                }
+                case 1:
+                    if (RayForCheck.End.X - RayForCheck.Start.X == 0 || RayForCheck.Start.X - RayForCheck.End.X == 0)
+                        return false;
+                    break;
+                case 2:
+                    if (RayForCheck.End.Y - RayForCheck.Start.Y == 0 || RayForCheck.Start.Y - RayForCheck.End.Y == 0)
+                        return false;
+                    break;
+                case 3:
+                    if (RayForCheck.End.Z - RayForCheck.Start.Z == 0 || RayForCheck.Start.Z - RayForCheck.End.Z == 0)
+                        return false;
+                    break;
             }
-            centerVertex = new Vertex((verDiagonal1.X + verDiagonal2.X) / 2, (verDiagonal1.Y + verDiagonal2.Y) / 2, (verDiagonal1.Z + verDiagonal2.Z) / 2);
-
-            return null;
+            return true;
         }
+
     }
 
 }
